@@ -1,2 +1,0 @@
-# HRManagementsys
-Special for Gazprom

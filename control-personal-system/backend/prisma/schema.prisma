@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  HR_MANAGER
+  MANAGER
+  EMPLOYEE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  MATERNITY
+  PATERNITY
+  OTHER
+}
+
+enum LeaveStatus {
+  DRAFT
+  PENDING
+  APPROVED_BY_MANAGER
+  APPROVED
+  REJECTED
+}
+
+enum AbsenceType {
+  SICK_LEAVE
+  DAY_OFF
+  BUSINESS_TRIP
+  REMOTE_WORK
+  OTHER
+}
+
+enum HistoryEventType {
+  HIRED
+  DEPARTMENT_CHANGE
+  POSITION_CHANGE
+  SALARY_CHANGE
+  TERMINATED
+  REINSTATED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      Role     @default(EMPLOYEE)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee      Employee?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  managerId   Int?     @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  manager   Employee?  @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees Employee[] @relation("DepartmentEmployees")
+  positions DepartmentPosition[]
+
+  @@map("departments")
+}
+
+model Position {
+  id          Int      @id @default(autoincrement())
+  title       String   @unique
+  description String?
+  minSalary   Float?
+  maxSalary   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employees   Employee[]
+  departments DepartmentPosition[]
+
+  @@map("positions")
+}
+
+model DepartmentPosition {
+  id           Int @id @default(autoincrement())
+  departmentId Int
+  positionId   Int
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  position   Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, positionId])
+  @@map("department_positions")
+}
+
+model Employee {
+  id               Int              @id @default(autoincrement())
+  employeeNumber   String           @unique
+  firstName        String
+  lastName         String
+  middleName       String?
+  dateOfBirth      DateTime
+  gender           Gender
+  phone            String?
+  email            String           @unique
+  address          String?
+  hireDate         DateTime
+  terminationDate  DateTime?
+  status           EmploymentStatus @default(ACTIVE)
+  salary           Float
+  photoUrl         String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  userId       Int?        @unique
+  departmentId Int?
+  positionId   Int?
+  managerId    Int?
+
+  user       User?       @relation(fields: [userId], references: [id])
+  department Department? @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+  position   Position?   @relation(fields: [positionId], references: [id])
+  manager    Employee?   @relation("EmployeeManager", fields: [managerId], references: [id])
+
+  subordinates       Employee[]          @relation("EmployeeManager")
+  managedDepartment  Department?         @relation("DepartmentManager")
+  leaveRequests      LeaveRequest[]
+  absences           Absence[]
+  employmentHistory  EmploymentHistory[]
+  leaveBalance       LeaveBalance?
+
+  @@index([departmentId])
+  @@index([positionId])
+  @@index([status])
+  @@map("employees")
+}
+
+model LeaveBalance {
+  id              Int @id @default(autoincrement())
+  employeeId      Int @unique
+  annualTotal     Int @default(28)
+  annualUsed      Int @default(0)
+  sickTotal       Int @default(10)
+  sickUsed        Int @default(0)
+  year            Int
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id          Int         @id @default(autoincrement())
+  employeeId  Int
+  type        LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  status      LeaveStatus @default(DRAFT)
+  reason      String?
+  managerComment String?
+  hrComment      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+model Absence {
+  id          Int         @id @default(autoincrement())
+  employeeId  Int
+  type        AbsenceType
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  documentUrl String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("absences")
+}
+
+model EmploymentHistory {
+  id          Int              @id @default(autoincrement())
+  employeeId  Int
+  eventType   HistoryEventType
+  eventDate   DateTime         @default(now())
+  description String
+  oldValue    String?
+  newValue    String?
+  createdAt   DateTime         @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([eventDate])
+  @@map("employment_history")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
